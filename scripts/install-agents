@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# Install the selected runtime's custom-agent definitions as named symlinks.
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: install-agents --runtime codex|claude --prefix PREFIX [--check | --install | --sync] [TARGET_DIRECTORY]
+
+Modes:
+  --check    Report installed, missing, stale, and conflicting links.
+  --install  Add missing links. Refuses to replace an existing path.
+  --sync     Remove only selected-runtime symlinks named PREFIX--* in the target, then recreate links.
+
+Each direct child of the repository is an agent folder. Install Codex from
+<agent>/codex/agent.toml or Claude from <agent>/claude/agent.md. TARGET_DIRECTORY
+defaults to ~/.codex/agents or ~/.claude/agents for the current user. A literal
+~ or ~/ path is resolved against the current user's home directory.
+EOF
+}
+
+MODE="--sync"
+RUNTIME=""
+PREFIX=""
+TARGET_DIRECTORY=""
+target_given=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --runtime|--prefix)
+      if [[ $# -lt 2 ]]; then
+        echo "$1 requires a value." >&2
+        exit 2
+      fi
+      if [[ "$1" == "--runtime" ]]; then RUNTIME="$2"; else PREFIX="$2"; fi
+      shift 2
+      ;;
+    --check|--install|--sync)
+      MODE="$1"
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      if [[ "$target_given" == true ]]; then
+        echo "Only one target directory may be supplied." >&2
+        usage >&2
+        exit 2
+      fi
+      TARGET_DIRECTORY="$1"
+      target_given=true
+      shift
+      ;;
+  esac
+done
+
+if [[ "$RUNTIME" != "codex" && "$RUNTIME" != "claude" ]]; then
+  echo "--runtime must be codex or claude." >&2
+  exit 2
+fi
+if [[ -z "$PREFIX" ]]; then
+  echo "--prefix is required." >&2
+  exit 2
+fi
+if [[ ! "$PREFIX" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+  echo "PREFIX must start with a letter or number and use only letters, numbers, dots, underscores, or hyphens." >&2
+  exit 2
+fi
+
+if [[ "$target_given" == false ]]; then
+  if [[ "$RUNTIME" == "codex" ]]; then TARGET_DIRECTORY="$HOME/.codex/agents"; else TARGET_DIRECTORY="$HOME/.claude/agents"; fi
+fi
+case "$TARGET_DIRECTORY" in
+  '~') TARGET_DIRECTORY="$HOME" ;;
+  '~/'*) TARGET_DIRECTORY="$HOME/${TARGET_DIRECTORY:2}" ;;
+esac
+if [[ "$TARGET_DIRECTORY" != /* ]]; then
+  echo "TARGET_DIRECTORY must be absolute or begin with ~/: $TARGET_DIRECTORY" >&2
+  exit 2
+fi
+
+SCRIPT_DIRECTORY="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+REPOSITORY_DIRECTORY="$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd -P)"
+if [[ "$RUNTIME" == "codex" ]]; then EXTENSION="toml"; else EXTENSION="md"; fi
+
+if [[ ! -d "$TARGET_DIRECTORY" ]]; then
+  if [[ "$MODE" == "--check" ]]; then
+    echo "Target directory does not exist: $TARGET_DIRECTORY" >&2
+    exit 1
+  fi
+  mkdir -p -- "$TARGET_DIRECTORY"
+fi
+
+agent_files=()
+shopt -s nullglob
+for agent_directory in "$REPOSITORY_DIRECTORY"/*/; do
+  [[ "$(basename -- "$agent_directory")" == "scripts" ]] && continue
+  candidate="${agent_directory%/}/$RUNTIME/agent.$EXTENSION"
+  [[ -f "$candidate" ]] && agent_files+=("$candidate")
+done
+if [[ ${#agent_files[@]} -eq 0 ]]; then
+  echo "No $RUNTIME definitions found under: $REPOSITORY_DIRECTORY" >&2
+  exit 1
+fi
+
+for agent_file in "${agent_files[@]}"; do
+  if [[ "$RUNTIME" == "codex" ]]; then
+    valid=$(rg -c '^(name|description|developer_instructions)\s*=' "$agent_file" || true)
+    [[ "$valid" -eq 3 ]] || { echo "Invalid Codex definition: $agent_file" >&2; exit 1; }
+  else
+    rg -q '^---$' "$agent_file" && rg -q '^name:' "$agent_file" && rg -q '^description:' "$agent_file" || { echo "Invalid Claude definition: $agent_file" >&2; exit 1; }
+  fi
+done
+
+link_name_for() {
+  local agent_file="$1"
+  local agent_directory
+  agent_directory="$(basename -- "$(dirname -- "$(dirname -- "$agent_file")")")"
+  printf '%s--%s.%s' "$PREFIX" "$agent_directory" "$EXTENSION"
+}
+
+status=0
+check() {
+  local agent_file link_name destination expected found
+  local expected_names=()
+  echo "Repository: $REPOSITORY_DIRECTORY"
+  echo "Runtime:    $RUNTIME"
+  echo "Target:     $TARGET_DIRECTORY"
+  echo "Prefix:     $PREFIX"
+  for agent_file in "${agent_files[@]}"; do
+    link_name="$(link_name_for "$agent_file")"
+    expected_names+=("$link_name")
+    destination="$TARGET_DIRECTORY/$link_name"
+    if [[ -L "$destination" && "$(readlink "$destination")" == "$agent_file" ]]; then
+      echo "installed  $link_name"
+    elif [[ -e "$destination" || -L "$destination" ]]; then
+      echo "conflict   $link_name -> $(readlink "$destination" 2>/dev/null || echo 'not a symlink')"
+      status=1
+    else
+      echo "missing    $link_name"
+      status=1
+    fi
+  done
+  for destination in "$TARGET_DIRECTORY/$PREFIX"--*."$EXTENSION"; do
+    [[ -L "$destination" ]] || continue
+    link_name="$(basename -- "$destination")"
+    found=false
+    for expected in "${expected_names[@]}"; do [[ "$link_name" == "$expected" ]] && found=true && break; done
+    if [[ "$found" == false ]]; then echo "stale      $link_name -> $(readlink "$destination")"; status=1; fi
+  done
+}
+
+case "$MODE" in
+  --check) check; exit "$status" ;;
+  --install|--sync)
+    if [[ "$MODE" == "--sync" ]]; then
+      for destination in "$TARGET_DIRECTORY/$PREFIX"--*."$EXTENSION"; do
+        [[ -L "$destination" ]] || continue
+        rm -- "$destination"
+        echo "removed    $(basename -- "$destination")"
+      done
+    fi
+    for agent_file in "${agent_files[@]}"; do
+      link_name="$(link_name_for "$agent_file")"
+      destination="$TARGET_DIRECTORY/$link_name"
+      if [[ -e "$destination" || -L "$destination" ]]; then
+        echo "Refusing to replace existing path: $destination" >&2
+        status=1
+      else
+        ln -s -- "$agent_file" "$destination"
+        echo "installed  $link_name"
+      fi
+    done
+    exit "$status"
+    ;;
+esac
