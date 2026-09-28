@@ -18,8 +18,10 @@ my-agent/
 
 `codex/agent.toml` defines the profile name, model, reasoning effort, sandbox,
 and shared instructions. `claude/agent.md` carries the equivalent behavioural
-contract in YAML frontmatter and a prompt body. Claude users select their
-model and permission settings separately.
+contract in YAML frontmatter and a prompt body. Claude definitions pin an
+appropriate model and tool boundary: read profiles can only inspect files,
+while the write profile uses Claude's standard permission prompts for local
+changes. Claude Code retains control of per-session effort and approvals.
 
 ## Profiles
 
