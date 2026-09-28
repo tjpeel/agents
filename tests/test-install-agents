@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Low-fi integration checks for non-destructive symlink install and exact uninstall.
+
+set -euo pipefail
+
+SCRIPT_DIRECTORY="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
+REPOSITORY_DIRECTORY="$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd -P)"
+INSTALLER="$REPOSITORY_DIRECTORY/scripts/install-agents"
+UNINSTALLER="$REPOSITORY_DIRECTORY/scripts/uninstall-agents"
+temporary_directory="$(mktemp -d)"
+trap 'rm -rf -- "$temporary_directory"' EXIT
+
+assert_file_name() {
+  local runtime="$1" file="$2" expected="$3" actual
+  if [[ "$runtime" == "codex" ]]; then
+    actual="$(sed -n 's/^name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$file")"
+  else
+    actual="$(sed -n 's/^name:[[:space:]]*//p' "$file")"
+  fi
+  [[ "$actual" == "$expected" ]] || { echo "Expected $file name $expected, got $actual" >&2; exit 1; }
+}
+
+for runtime in codex claude; do
+  if [[ "$runtime" == "codex" ]]; then extension="toml"; else extension="md"; fi
+  target="$temporary_directory/$runtime"
+  "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
+
+  for profile in read-exceptional read-high read-low read-medium write-medium; do
+    definition="$target/tjpeel-$profile.$extension"
+    [[ -L "$definition" ]] || { echo "Missing symlinked definition: $definition" >&2; exit 1; }
+    assert_file_name "$runtime" "$definition" "${profile//-/_}"
+  done
+
+  printf 'preserve me\n' > "$target/tjpeel-ee-read-low.$extension"
+  "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
+  [[ ! -e "$target/tjpeel-read-low.$extension" ]] || { echo "Expected tjpeel-read-low to be removed" >&2; exit 1; }
+  [[ -f "$target/tjpeel-ee-read-low.$extension" ]] || { echo "Uninstaller removed another prefix" >&2; exit 1; }
+
+  "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
+  "$INSTALLER" --runtime "$runtime" --prefix tjpeel --check "$target"
+done
+
+echo "Agent installer tests passed."

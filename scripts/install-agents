@@ -12,9 +12,12 @@ Modes:
   --install  Add missing links and leave every existing path untouched.
 
 Each direct child of the repository is an agent folder. Install Codex from
-<agent>/codex/agent.toml or Claude from <agent>/claude/agent.md. TARGET_DIRECTORY
-defaults to ~/.codex/agents or ~/.claude/agents for the current user. A literal
-~ or ~/ path is resolved against the current user's home directory.
+<agent>/codex/agent.toml or Claude from <agent>/claude/agent.md. PREFIX is
+included in the visible symlink filename: for example, --prefix tjpeel installs
+read-low as tjpeel-read-low. The runtime definition is linked unchanged, so its
+declared agent name remains stable. TARGET_DIRECTORY defaults to ~/.codex/agents
+or ~/.claude/agents for the current user. A literal ~ or ~/ path is resolved
+against the current user's home directory.
 
 EOF
 }
@@ -73,8 +76,8 @@ if [[ -z "$PREFIX" ]]; then
   echo "--prefix is required." >&2
   exit 2
 fi
-if [[ ! "$PREFIX" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
-  echo "PREFIX must start with a letter or number and use only letters, numbers, dots, underscores, or hyphens." >&2
+if [[ ! "$PREFIX" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  echo "PREFIX must start with a lowercase letter or number and use only lowercase letters, numbers, or hyphens." >&2
   exit 2
 fi
 
@@ -123,30 +126,35 @@ for agent_file in "${agent_files[@]}"; do
   fi
 done
 
-link_name_for() {
+installed_name_for() {
   local agent_file="$1"
   local agent_directory
   agent_directory="$(basename -- "$(dirname -- "$(dirname -- "$agent_file")")")"
-  printf '%s--%s.%s' "$PREFIX" "$agent_directory" "$EXTENSION"
+  printf '%s-%s' "$PREFIX" "$agent_directory"
+}
+
+destination_for() {
+  local agent_file="$1"
+  printf '%s/%s.%s' "$TARGET_DIRECTORY" "$(installed_name_for "$agent_file")" "$EXTENSION"
 }
 
 status=0
 check() {
-  local agent_file link_name destination
+  local agent_file installed_name destination
   echo "Repository: $REPOSITORY_DIRECTORY"
   echo "Runtime:    $RUNTIME"
   echo "Target:     $TARGET_DIRECTORY"
   echo "Prefix:     $PREFIX"
   for agent_file in "${agent_files[@]}"; do
-    link_name="$(link_name_for "$agent_file")"
-    destination="$TARGET_DIRECTORY/$link_name"
+    installed_name="$(installed_name_for "$agent_file")"
+    destination="$(destination_for "$agent_file")"
     if [[ -L "$destination" && "$(readlink "$destination")" == "$agent_file" ]]; then
-      echo "installed  $link_name"
+      echo "installed  $installed_name"
     elif [[ -e "$destination" || -L "$destination" ]]; then
-      echo "conflict   $link_name -> $(readlink "$destination" 2>/dev/null || echo 'not a symlink')"
+      echo "conflict   $installed_name -> $(readlink "$destination" 2>/dev/null || echo 'not a symlink')"
       status=1
     else
-      echo "missing    $link_name"
+      echo "missing    $installed_name"
       status=1
     fi
   done
@@ -156,16 +164,16 @@ case "$MODE" in
   --check) check; exit "$status" ;;
   --install)
     for agent_file in "${agent_files[@]}"; do
-      link_name="$(link_name_for "$agent_file")"
-      destination="$TARGET_DIRECTORY/$link_name"
+      installed_name="$(installed_name_for "$agent_file")"
+      destination="$(destination_for "$agent_file")"
       if [[ -L "$destination" && "$(readlink "$destination")" == "$agent_file" ]]; then
-        echo "installed  $link_name"
+        echo "installed  $installed_name"
       elif [[ -e "$destination" || -L "$destination" ]]; then
         echo "Refusing to replace existing path: $destination" >&2
         status=1
       else
         ln -s -- "$agent_file" "$destination"
-        echo "installed  $link_name"
+        echo "installed  $installed_name"
       fi
     done
     exit "$status"
