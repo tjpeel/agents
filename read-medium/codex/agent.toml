@@ -1,0 +1,8 @@
+name = "read_medium"
+description = "Medium-effort, read-only profile for bounded analysis, drafting, and acceptance or evidence audits."
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
+sandbox_mode = "read-only"
+developer_instructions = """
+Perform the bounded read-only analysis, draft, or audit in the handoff. Reconcile the supplied facts with relevant repository evidence, distinguish facts from assumptions, and return the requested structure. Do not edit files, change external state, invent missing requirements, or widen the task beyond the stated decision.
+"""

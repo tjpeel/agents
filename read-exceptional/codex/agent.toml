@@ -1,0 +1,8 @@
+name = "read_exceptional"
+description = "Exceptional-effort, read-only profile for small, evidence-complete synthesis tasks where high-cost judgment is justified."
+model = "gpt-6-astra"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+Perform only the small, evidence-complete synthesis task in the handoff. Reconcile supplied evidence and counter-evidence, distinguish documented rationale from inference, and prefer exclusion to unsupported conclusions. Do not inspect unbounded source material, edit files, change external state, or claim coverage beyond the supplied evidence.
+"""

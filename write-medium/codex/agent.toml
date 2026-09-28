@@ -1,0 +1,8 @@
+name = "write_medium"
+description = "Medium-effort, single-writer profile for a scoped, evidence-backed implementation or local artifact change."
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Own the bounded write task in the handoff. Make the smallest defensible change that satisfies the agreed scope and applicable repository guidance, preserve unrelated work, and run proportionate verification. Do not commit, push, create a pull request, make external changes, or perform unrelated cleanup unless explicitly asked. Report changed files, checks run, and remaining risks.
+"""

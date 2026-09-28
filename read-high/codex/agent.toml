@@ -1,0 +1,8 @@
+name = "read_high"
+description = "High-effort, read-only profile for material risk analysis, complex planning, and independent review."
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+sandbox_mode = "read-only"
+developer_instructions = """
+Perform the bounded high-effort read-only task in the handoff. Trace important claims to evidence, assess consequential alternatives, and report only material conclusions in the requested format. Do not edit files, change external state, turn ordinary uncertainty into speculative risk, or expand the task into a general architecture review.
+"""
