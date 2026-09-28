@@ -74,11 +74,11 @@ description: One sentence explaining this effort and access profile.
 Perform the bounded task in the handoff without exceeding this profile's access boundary.
 ```
 
-## Install or refresh
+## Install missing profiles
 
 ```zsh
-./scripts/install-agents --runtime codex --prefix personal --sync ~/.codex/agents
-./scripts/install-agents --runtime claude --prefix personal --sync ~/.claude/agents
+./scripts/install-agents --runtime codex --prefix personal ~/.codex/agents
+./scripts/install-agents --runtime claude --prefix personal ~/.claude/agents
 ```
 
 `--runtime` selects which configuration to install. `--prefix` is required and
@@ -86,33 +86,14 @@ must be unique per agent repository. The target defaults to the current user's
 runtime-specific directory, so these shorter commands are equivalent:
 
 ```zsh
-./scripts/install-agents --runtime codex --prefix personal --sync
-./scripts/install-agents --runtime claude --prefix personal --sync
+./scripts/install-agents --runtime codex --prefix personal
+./scripts/install-agents --runtime claude --prefix personal
 ```
 
 The installer creates links named `personal--my-profile.toml` or
 `personal--my-profile.md`. Codex identifies a custom agent by the TOML `name`
 field; Claude uses the Markdown frontmatter. The installed filename is safely
 namespaced without changing the profile's declared name.
-
-## Migrate legacy roles safely
-
-The old task-role definitions are deliberately not removed by `--sync`: it
-only manages this repository's prefixed symlinks. Archive explicitly named
-legacy installed definitions before installing the profiles. For Codex:
-
-```zsh
-./scripts/install-agents --runtime codex --prefix personal --sync \
-  --archive-name adr_synthesizer --archive-name code_mapper \
-  --archive-name decision_evidence_analyst --archive-name history_indexer \
-  --archive-name implementer --archive-name pr_reviewer \
-  --archive-name risk_adjudicator --archive-name ticket_editor \
-  --archive-name ticket_planner --archive-name validation_auditor
-```
-
-Use the same command with `--runtime claude` to archive matching Claude
-definitions. The installer moves only explicitly named, non-symlink files into
-an archive beneath the target directory and reports every move.
 
 ## Check current state
 
@@ -121,7 +102,7 @@ an archive beneath the target directory and reports every move.
 ./scripts/install-agents --runtime claude --prefix personal --check ~/.claude/agents
 ```
 
-`--check` exits non-zero for missing, stale, or conflicting links. `--install`
-adds only missing links and refuses to overwrite anything. `--sync` removes
-only symlinks whose name starts with this repository's prefix for the selected
-runtime, then recreates the links. It never removes a real file or directory.
+`--check` exits non-zero for missing or conflicting links. The default
+`--install` mode adds only missing links. It never replaces, removes, moves, or
+otherwise changes an existing path; resolve conflicts and remove obsolete
+definitions yourself before running it again.

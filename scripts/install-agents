@@ -5,35 +5,29 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: install-agents --runtime codex|claude --prefix PREFIX [--check | --install | --sync] [--archive-name NAME ...] [TARGET_DIRECTORY]
+Usage: install-agents --runtime codex|claude --prefix PREFIX [--check | --install] [TARGET_DIRECTORY]
 
 Modes:
-  --check    Report installed, missing, stale, and conflicting links.
-  --install  Add missing links. Refuses to replace an existing path.
-  --sync     Remove only selected-runtime symlinks named PREFIX--* in the target, then recreate links.
+  --check    Report installed, missing, and conflicting links.
+  --install  Add missing links and leave every existing path untouched.
 
 Each direct child of the repository is an agent folder. Install Codex from
 <agent>/codex/agent.toml or Claude from <agent>/claude/agent.md. TARGET_DIRECTORY
 defaults to ~/.codex/agents or ~/.claude/agents for the current user. A literal
 ~ or ~/ path is resolved against the current user's home directory.
 
---archive-name NAME moves an explicitly named, non-symlink legacy definition
-from TARGET_DIRECTORY into .archived-agent-definitions before installation.
-It is intended for a deliberate migration from retired profiles; it never
-archives a definition unless its declared name exactly matches NAME.
 EOF
 }
 
-MODE="--sync"
+MODE="--install"
 RUNTIME=""
 PREFIX=""
 TARGET_DIRECTORY=""
 target_given=false
-archive_names=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --runtime|--prefix|--archive-name)
+    --runtime|--prefix)
       if [[ $# -lt 2 ]]; then
         echo "$1 requires a value." >&2
         exit 2
@@ -42,18 +36,21 @@ while [[ $# -gt 0 ]]; do
         RUNTIME="$2"
       elif [[ "$1" == "--prefix" ]]; then
         PREFIX="$2"
-      else
-        archive_names+=("$2")
       fi
       shift 2
       ;;
-    --check|--install|--sync)
+    --check|--install)
       MODE="$1"
       shift
       ;;
     --help|-h)
       usage
       exit 0
+      ;;
+    --*)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
       ;;
     *)
       if [[ "$target_given" == true ]]; then
@@ -133,51 +130,15 @@ link_name_for() {
   printf '%s--%s.%s' "$PREFIX" "$agent_directory" "$EXTENSION"
 }
 
-declared_name_for() {
-  local agent_file="$1"
-  if [[ "$RUNTIME" == "codex" ]]; then
-    sed -n 's/^name = "\(.*\)"/\1/p' "$agent_file" | head -n 1
-  else
-    sed -n 's/^name: *\(.*\)$/\1/p' "$agent_file" | head -n 1
-  fi
-}
-
-archive_requested_legacy_definitions() {
-  local requested candidate declared archive_directory timestamp
-  [[ ${#archive_names[@]} -gt 0 ]] || return 0
-
-  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-  archive_directory="$TARGET_DIRECTORY/.archived-agent-definitions/$timestamp"
-
-  for requested in "${archive_names[@]}"; do
-    local found=false
-    for candidate in "$TARGET_DIRECTORY"/*."$EXTENSION"; do
-      [[ -f "$candidate" && ! -L "$candidate" ]] || continue
-      declared="$(declared_name_for "$candidate")"
-      [[ "$declared" == "$requested" ]] || continue
-      mkdir -p -- "$archive_directory"
-      mv -- "$candidate" "$archive_directory/$(basename -- "$candidate")"
-      echo "archived   $requested -> $archive_directory/$(basename -- "$candidate")"
-      found=true
-      break
-    done
-    if [[ "$found" == false ]]; then
-      echo "not found  $requested"
-    fi
-  done
-}
-
 status=0
 check() {
-  local agent_file link_name destination expected found
-  local expected_names=()
+  local agent_file link_name destination
   echo "Repository: $REPOSITORY_DIRECTORY"
   echo "Runtime:    $RUNTIME"
   echo "Target:     $TARGET_DIRECTORY"
   echo "Prefix:     $PREFIX"
   for agent_file in "${agent_files[@]}"; do
     link_name="$(link_name_for "$agent_file")"
-    expected_names+=("$link_name")
     destination="$TARGET_DIRECTORY/$link_name"
     if [[ -L "$destination" && "$(readlink "$destination")" == "$agent_file" ]]; then
       echo "installed  $link_name"
@@ -189,30 +150,17 @@ check() {
       status=1
     fi
   done
-  for destination in "$TARGET_DIRECTORY/$PREFIX"--*."$EXTENSION"; do
-    [[ -L "$destination" ]] || continue
-    link_name="$(basename -- "$destination")"
-    found=false
-    for expected in "${expected_names[@]}"; do [[ "$link_name" == "$expected" ]] && found=true && break; done
-    if [[ "$found" == false ]]; then echo "stale      $link_name -> $(readlink "$destination")"; status=1; fi
-  done
 }
 
 case "$MODE" in
   --check) check; exit "$status" ;;
-  --install|--sync)
-    archive_requested_legacy_definitions
-    if [[ "$MODE" == "--sync" ]]; then
-      for destination in "$TARGET_DIRECTORY/$PREFIX"--*."$EXTENSION"; do
-        [[ -L "$destination" ]] || continue
-        rm -- "$destination"
-        echo "removed    $(basename -- "$destination")"
-      done
-    fi
+  --install)
     for agent_file in "${agent_files[@]}"; do
       link_name="$(link_name_for "$agent_file")"
       destination="$TARGET_DIRECTORY/$link_name"
-      if [[ -e "$destination" || -L "$destination" ]]; then
+      if [[ -L "$destination" && "$(readlink "$destination")" == "$agent_file" ]]; then
+        echo "installed  $link_name"
+      elif [[ -e "$destination" || -L "$destination" ]]; then
         echo "Refusing to replace existing path: $destination" >&2
         status=1
       else
