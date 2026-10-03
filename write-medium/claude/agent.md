@@ -2,7 +2,8 @@
 name: write_medium
 description: Make one scoped, evidence-backed implementation or local artifact change as the sole writer.
 tools: Read, Glob, Grep, Edit, Write, Bash
-model: sonnet
+model: claude-sonnet-5-5
+effort: medium
 permissionMode: default
 ---
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Low-fi integration checks for non-destructive symlink install and exact uninstall.
+# Integration checks for copied profiles, safe refresh and exact removal.
 
 set -euo pipefail
 
@@ -7,7 +7,7 @@ SCRIPT_DIRECTORY="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
 REPOSITORY_DIRECTORY="$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd -P)"
 INSTALLER="$REPOSITORY_DIRECTORY/scripts/install-agents"
 UNINSTALLER="$REPOSITORY_DIRECTORY/scripts/uninstall-agents"
-temporary_directory="$(mktemp -d)"
+temporary_directory="$(mktemp -d "${TMPDIR:-/tmp}/agent-install-test.XXXXXX")"
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
 assert_file_name() {
@@ -16,28 +16,100 @@ assert_file_name() {
     actual="$(sed -n 's/^name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$file")"
   else
     actual="$(sed -n 's/^name:[[:space:]]*//p' "$file")"
+    [[ "$(head -n 1 "$file")" == "---" ]]
   fi
   [[ "$actual" == "$expected" ]] || { echo "Expected $file name $expected, got $actual" >&2; exit 1; }
+}
+
+expect_failure() {
+  if "$@" > "$temporary_directory/expected-failure.log" 2>&1; then
+    echo "Expected a non-zero result: $*" >&2
+    exit 1
+  fi
 }
 
 for runtime in codex claude; do
   if [[ "$runtime" == "codex" ]]; then extension="toml"; else extension="md"; fi
   target="$temporary_directory/$runtime"
-  "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
+  "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
+  "$INSTALLER" --runtime "$runtime" --prefix tjpeel --check "$target" >/dev/null
 
   for profile in read-exceptional read-high read-low read-medium write-medium; do
     definition="$target/tjpeel-$profile.$extension"
-    [[ -L "$definition" ]] || { echo "Missing symlinked definition: $definition" >&2; exit 1; }
+    [[ -f "$definition" && ! -L "$definition" ]]
     assert_file_name "$runtime" "$definition" "${profile//-/_}"
   done
-
+  [[ "$(rg --files "$target" | wc -l | tr -d ' ')" == 5 ]]
+  "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
   printf 'preserve me\n' > "$target/tjpeel-ee-read-low.$extension"
-  "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
-  [[ ! -e "$target/tjpeel-read-low.$extension" ]] || { echo "Expected tjpeel-read-low to be removed" >&2; exit 1; }
-  [[ -f "$target/tjpeel-ee-read-low.$extension" ]] || { echo "Uninstaller removed another prefix" >&2; exit 1; }
+  "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
+  [[ ! -e "$target/tjpeel-read-low.$extension" ]]
+  [[ -f "$target/tjpeel-ee-read-low.$extension" ]]
 
-  "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
-  "$INSTALLER" --runtime "$runtime" --prefix tjpeel --check "$target"
+  # Only links to the exact current repository are eligible for migration.
+  mkdir -p "$target"
+  for profile in read-exceptional read-high read-low read-medium write-medium; do
+    ln -s -- "$REPOSITORY_DIRECTORY/$profile/$runtime/agent.$extension" "$target/tjpeel-$profile.$extension"
+  done
+  expect_failure "$INSTALLER" --runtime "$runtime" --prefix tjpeel --check "$target"
+  expect_failure "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
+  [[ -L "$target/tjpeel-read-low.$extension" ]]
+  "$INSTALLER" --runtime "$runtime" --prefix tjpeel --refresh "$target" >/dev/null
+  "$INSTALLER" --runtime "$runtime" --prefix tjpeel --check "$target" >/dev/null
+  [[ -f "$target/tjpeel-read-low.$extension" && ! -L "$target/tjpeel-read-low.$extension" ]]
+
+  # Edited installed definitions are preserved by refresh and uninstall.
+  edited="$target/tjpeel-read-low.$extension"
+  printf '\n# Local change.\n' >> "$edited"
+  cp -- "$edited" "$temporary_directory/saved.$extension"
+  expect_failure "$INSTALLER" --runtime "$runtime" --prefix tjpeel --refresh "$target"
+  cmp -- "$edited" "$temporary_directory/saved.$extension"
+  expect_failure "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
+  cmp -- "$edited" "$temporary_directory/saved.$extension"
+  [[ -f "$target/tjpeel-ee-read-low.$extension" ]]
+
+  # A foreign file or link at an expected name is never replaced or removed.
+  conflict="$temporary_directory/$runtime-conflict"
+  mkdir -p "$conflict"
+  printf 'foreign definition\n' > "$conflict/tjpeel-read-low.$extension"
+  expect_failure "$INSTALLER" --runtime "$runtime" --prefix tjpeel --refresh "$conflict"
+  expect_failure "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$conflict"
+  [[ "$(cat "$conflict/tjpeel-read-low.$extension")" == 'foreign definition' ]]
+  rm -- "$conflict/tjpeel-read-low.$extension"
+  ln -s -- "$temporary_directory/saved.$extension" "$conflict/tjpeel-read-low.$extension"
+  expect_failure "$INSTALLER" --runtime "$runtime" --prefix tjpeel --refresh "$conflict"
+  expect_failure "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$conflict"
+  [[ "$(readlink "$conflict/tjpeel-read-low.$extension")" == "$temporary_directory/saved.$extension" ]]
+
+  # An unchanged old copy remains owned after its source is revised.
+  fixture="$temporary_directory/$runtime-fixture"
+  mkdir -p "$fixture/scripts" "$fixture/example/$runtime"
+  cp -- "$REPOSITORY_DIRECTORY/scripts/install-agents" "$REPOSITORY_DIRECTORY/scripts/uninstall-agents" \
+    "$REPOSITORY_DIRECTORY/scripts/agent-installation-lib.sh" "$fixture/scripts/"
+  cp -- "$REPOSITORY_DIRECTORY/catalogue-id" "$fixture/catalogue-id"
+  source_definition="$fixture/example/$runtime/agent.$extension"
+  cp -- "$REPOSITORY_DIRECTORY/read-low/$runtime/agent.$extension" "$source_definition"
+  fixture_target="$temporary_directory/$runtime-refresh"
+  "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test "$fixture_target" >/dev/null
+  # Another catalogue with the same prefix and source layout owns its own copies.
+  foreign_fixture="$temporary_directory/$runtime-foreign-fixture"
+  cp -R -- "$fixture" "$foreign_fixture"
+  printf '00000000-0000-4000-8000-000000000001\n' > "$foreign_fixture/catalogue-id"
+  foreign_copy="$fixture_target/test-example.$extension"
+  cp -- "$foreign_copy" "$temporary_directory/foreign-copy.$extension"
+  expect_failure "$foreign_fixture/scripts/install-agents" --runtime "$runtime" --prefix test --refresh "$fixture_target"
+  expect_failure "$foreign_fixture/scripts/uninstall-agents" --runtime "$runtime" --prefix test "$fixture_target"
+  cmp -- "$foreign_copy" "$temporary_directory/foreign-copy.$extension"
+
+  printf '\n# Revised source.\n' >> "$source_definition"
+  expect_failure "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test --check "$fixture_target"
+  expect_failure "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test "$fixture_target"
+  "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test --refresh "$fixture_target" >/dev/null
+  "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test --check "$fixture_target" >/dev/null
+  rg -q '^# Revised source\.$' "$fixture_target/test-example.$extension"
+  printf '\n# Another source revision.\n' >> "$source_definition"
+  "$fixture/scripts/uninstall-agents" --runtime "$runtime" --prefix test "$fixture_target" >/dev/null
+  [[ ! -e "$fixture_target/test-example.$extension" ]]
 done
 
-echo "Agent installer tests passed."
+echo "Agent install, discovery, refresh and ownership checks passed."

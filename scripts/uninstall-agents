@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remove this repository's installed agent symlinks for one explicit prefix.
+# Remove this repository's owned installed agent definitions for one explicit prefix.
 
 set -euo pipefail
 
@@ -8,8 +8,8 @@ usage() {
 Usage: uninstall-agents --runtime codex|claude --prefix PREFIX [--check | --uninstall] [TARGET_DIRECTORY]
 
 Modes:
-  --check      Report this repository's installed and missing symlinks.
-  --uninstall  Remove this repository's installed symlinks for PREFIX.
+  --check      Report this repository's owned, missing, and conflicting definitions.
+  --uninstall  Remove this repository's unchanged owned copies or legacy links for PREFIX.
 
 Only the exact agent names generated from this repository's current profile
 folders are removed. For example, --prefix tjpeel removes tjpeel-read-low,
@@ -64,7 +64,7 @@ done
 [[ "$PREFIX" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "PREFIX must start with a lowercase letter or number and use only lowercase letters, numbers, or hyphens." >&2; exit 2; }
 
 if [[ "$target_given" == false ]]; then
-  if [[ "$RUNTIME" == "codex" ]]; then TARGET_DIRECTORY="$HOME/.codex/agents"; else TARGET_DIRECTORY="$HOME/.claude/agents"; fi
+  if [[ "$RUNTIME" == "codex" ]]; then TARGET_DIRECTORY="${CODEX_HOME:-$HOME/.codex}/agents"; else TARGET_DIRECTORY="$HOME/.claude/agents"; fi
 fi
 case "$TARGET_DIRECTORY" in
   '~') TARGET_DIRECTORY="$HOME" ;;
@@ -74,6 +74,8 @@ esac
 
 SCRIPT_DIRECTORY="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
 REPOSITORY_DIRECTORY="$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd -P)"
+source "$SCRIPT_DIRECTORY/agent-installation-lib.sh"
+load_catalogue_identity
 if [[ "$RUNTIME" == "codex" ]]; then EXTENSION="toml"; else EXTENSION="md"; fi
 
 agent_directories=()
@@ -89,7 +91,7 @@ for agent_directory in "${agent_directories[@]}"; do
   installed_name="$PREFIX-$agent_directory"
   destination="$TARGET_DIRECTORY/$installed_name.$EXTENSION"
   agent_file="$REPOSITORY_DIRECTORY/$agent_directory/$RUNTIME/agent.$EXTENSION"
-  if [[ -L "$destination" && "$(readlink "$destination")" == "$agent_file" ]]; then
+  if is_owned_link "$destination" "$agent_file" || is_owned_copy "$destination" "$agent_file"; then
     if [[ "$MODE" == "--check" ]]; then
       echo "installed  $installed_name"
     else
@@ -97,7 +99,7 @@ for agent_directory in "${agent_directories[@]}"; do
       echo "uninstalled  $installed_name"
     fi
   elif [[ -e "$destination" || -L "$destination" ]]; then
-    echo "conflict   $installed_name -> $(readlink "$destination" 2>/dev/null || echo 'not this repository link')"
+    echo "conflict   $installed_name -> $(readlink "$destination" 2>/dev/null || echo 'unowned or locally changed definition')"
     status=1
   else
     echo "missing    $installed_name"
@@ -105,4 +107,4 @@ for agent_directory in "${agent_directories[@]}"; do
   fi
 done
 
-if [[ "$MODE" == "--check" ]]; then exit "$status"; fi
+exit "$status"

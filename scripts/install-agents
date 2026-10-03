@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Install the selected runtime's custom-agent definitions as named symlinks.
+# Install the selected runtime's custom-agent definitions as owned regular files.
 
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: install-agents --runtime codex|claude --prefix PREFIX [--check | --install] [TARGET_DIRECTORY]
+Usage: install-agents --runtime codex|claude --prefix PREFIX [--check | --install | --refresh] [TARGET_DIRECTORY]
 
 Modes:
-  --check    Report installed, missing, and conflicting links.
-  --install  Add missing links and leave every existing path untouched.
+  --check    Report current, stale, legacy, missing, and conflicting definitions.
+  --install  Add missing definitions and leave every existing path untouched.
+  --refresh  Update unchanged owned copies and migrate this repository's links.
 
 Each direct child of the repository is an agent folder. Install Codex from
 <agent>/codex/agent.toml or Claude from <agent>/claude/agent.md. PREFIX is
-included in the visible symlink filename: for example, --prefix tjpeel installs
-read-low as tjpeel-read-low. The runtime definition is linked unchanged, so its
-declared agent name remains stable. TARGET_DIRECTORY defaults to ~/.codex/agents
+included in the installed filename: for example, --prefix tjpeel installs
+read-low as tjpeel-read-low. Definitions are copied with ownership comments; their
+declared agent names remain stable. TARGET_DIRECTORY defaults to ~/.codex/agents
 or ~/.claude/agents for the current user. A literal ~ or ~/ path is resolved
 against the current user's home directory.
 
@@ -42,7 +43,7 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
-    --check|--install)
+    --check|--install|--refresh)
       MODE="$1"
       shift
       ;;
@@ -82,7 +83,7 @@ if [[ ! "$PREFIX" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
 fi
 
 if [[ "$target_given" == false ]]; then
-  if [[ "$RUNTIME" == "codex" ]]; then TARGET_DIRECTORY="$HOME/.codex/agents"; else TARGET_DIRECTORY="$HOME/.claude/agents"; fi
+  if [[ "$RUNTIME" == "codex" ]]; then TARGET_DIRECTORY="${CODEX_HOME:-$HOME/.codex}/agents"; else TARGET_DIRECTORY="$HOME/.claude/agents"; fi
 fi
 case "$TARGET_DIRECTORY" in
   '~') TARGET_DIRECTORY="$HOME" ;;
@@ -95,6 +96,8 @@ fi
 
 SCRIPT_DIRECTORY="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)"
 REPOSITORY_DIRECTORY="$(CDPATH= cd -- "$SCRIPT_DIRECTORY/.." && pwd -P)"
+source "$SCRIPT_DIRECTORY/agent-installation-lib.sh"
+load_catalogue_identity
 if [[ "$RUNTIME" == "codex" ]]; then EXTENSION="toml"; else EXTENSION="md"; fi
 
 if [[ ! -d "$TARGET_DIRECTORY" ]]; then
@@ -118,11 +121,15 @@ if [[ ${#agent_files[@]} -eq 0 ]]; then
 fi
 
 for agent_file in "${agent_files[@]}"; do
+  if rg -q '^# personal-agents-(catalogue|source|checksum): ' "$agent_file"; then
+    echo "Source definition contains reserved ownership comments: $agent_file" >&2
+    exit 1
+  fi
   if [[ "$RUNTIME" == "codex" ]]; then
     valid=$(rg -c '^(name|description|developer_instructions)\s*=' "$agent_file" || true)
     [[ "$valid" -eq 3 ]] || { echo "Invalid Codex definition: $agent_file" >&2; exit 1; }
   else
-    rg -q '^---$' "$agent_file" && rg -q '^name:' "$agent_file" && rg -q '^description:' "$agent_file" || { echo "Invalid Claude definition: $agent_file" >&2; exit 1; }
+    [[ "$(head -n 1 "$agent_file")" == "---" ]] && rg -q '^name:' "$agent_file" && rg -q '^description:' "$agent_file" || { echo "Invalid Claude definition: $agent_file" >&2; exit 1; }
   fi
 done
 
@@ -139,43 +146,30 @@ destination_for() {
 }
 
 status=0
-check() {
-  local agent_file installed_name destination
-  echo "Repository: $REPOSITORY_DIRECTORY"
-  echo "Runtime:    $RUNTIME"
-  echo "Target:     $TARGET_DIRECTORY"
-  echo "Prefix:     $PREFIX"
-  for agent_file in "${agent_files[@]}"; do
-    installed_name="$(installed_name_for "$agent_file")"
-    destination="$(destination_for "$agent_file")"
-    if [[ -L "$destination" && "$(readlink "$destination")" == "$agent_file" ]]; then
-      echo "installed  $installed_name"
-    elif [[ -e "$destination" || -L "$destination" ]]; then
-      echo "conflict   $installed_name -> $(readlink "$destination" 2>/dev/null || echo 'not a symlink')"
-      status=1
+for agent_file in "${agent_files[@]}"; do
+  installed_name="$(installed_name_for "$agent_file")"
+  destination="$(destination_for "$agent_file")"
+
+  if is_current_copy "$destination" "$agent_file"; then
+    echo "installed  $installed_name"
+  elif is_owned_link "$destination" "$agent_file" || is_owned_copy "$destination" "$agent_file"; then
+    if [[ "$MODE" == "--refresh" ]]; then
+      write_definition "$agent_file" "$destination"
+      echo "refreshed  $installed_name"
     else
-      echo "missing    $installed_name"
+      if is_owned_link "$destination" "$agent_file"; then state="legacy"; else state="stale"; fi
+      echo "$state  $installed_name (use --refresh)"
       status=1
     fi
-  done
-}
-
-case "$MODE" in
-  --check) check; exit "$status" ;;
-  --install)
-    for agent_file in "${agent_files[@]}"; do
-      installed_name="$(installed_name_for "$agent_file")"
-      destination="$(destination_for "$agent_file")"
-      if [[ -L "$destination" && "$(readlink "$destination")" == "$agent_file" ]]; then
-        echo "installed  $installed_name"
-      elif [[ -e "$destination" || -L "$destination" ]]; then
-        echo "Refusing to replace existing path: $destination" >&2
-        status=1
-      else
-        ln -s -- "$agent_file" "$destination"
-        echo "installed  $installed_name"
-      fi
-    done
-    exit "$status"
-    ;;
-esac
+  elif [[ -e "$destination" || -L "$destination" ]]; then
+    echo "conflict   $installed_name (unowned or locally changed definition)" >&2
+    status=1
+  elif [[ "$MODE" == "--check" ]]; then
+    echo "missing    $installed_name"
+    status=1
+  else
+    write_definition "$agent_file" "$destination"
+    echo "installed  $installed_name"
+  fi
+done
+exit "$status"

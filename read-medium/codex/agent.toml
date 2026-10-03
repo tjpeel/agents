@@ -1,6 +1,6 @@
 name = "read_medium"
 description = "Medium-effort, read-only profile for bounded analysis, drafting, and acceptance or evidence audits."
-model = "gpt-5.6-terra"
+model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 developer_instructions = """
