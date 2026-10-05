@@ -196,12 +196,16 @@ longer wanted.
 
 ## Validate a change
 
-Run `tests/test-install-agents`, `git diff --check` and
-`scripts/check-public-content`. The installer suite uses temporary directories
-and runs without ripgrep on `PATH`. It checks regular-file discovery, stable
-names, legacy migration, source refresh, foreign-catalogue and local-edit
-protection, and exact removal. It does not prove that a running Codex or Claude
-session can spawn a profile or access a pinned model.
+Run `tests/test-install-agents`, `tests/test-check-public-content`,
+`git diff --check` and `scripts/check-public-content`. Both test suites use
+temporary directories and run without ripgrep on `PATH`. The installer suite
+checks regular-file discovery, stable names, legacy migration, source refresh,
+foreign-catalogue and local-edit protection, and exact removal. It does not prove
+that a running Codex or Claude session can spawn a profile or access a pinned
+model.
+
+The public-content suite checks credential detection, hidden and binary files,
+exclusions, and failure when file traversal or scanning cannot complete.
 
 ## References
 
