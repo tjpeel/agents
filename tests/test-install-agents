@@ -10,6 +10,14 @@ UNINSTALLER="$REPOSITORY_DIRECTORY/scripts/uninstall-agents"
 temporary_directory="$(mktemp -d "${TMPDIR:-/tmp}/agent-install-test.XXXXXX")"
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
+# Run every installer mode with standard utilities and no ripgrep on PATH.
+standard_tool_directory="$temporary_directory/bin"
+mkdir -p "$standard_tool_directory"
+for tool in bash basename cat cksum cmp cp dirname grep head ln mkdir mktemp mv readlink rm sed tail; do
+  ln -s -- "$(command -v "$tool")" "$standard_tool_directory/$tool"
+done
+export PATH="$standard_tool_directory"
+
 assert_file_name() {
   local runtime="$1" file="$2" expected="$3" actual
   if [[ "$runtime" == "codex" ]]; then
@@ -39,7 +47,8 @@ for runtime in codex claude; do
     [[ -f "$definition" && ! -L "$definition" ]]
     assert_file_name "$runtime" "$definition" "${profile//-/_}"
   done
-  [[ "$(rg --files "$target" | wc -l | tr -d ' ')" == 6 ]]
+  installed_files=("$target"/*)
+  [[ ${#installed_files[@]} -eq 6 ]]
   "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
   printf 'preserve me\n' > "$target/tjpeel-ee-read-low.$extension"
   "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
@@ -125,9 +134,21 @@ for runtime in codex claude; do
   expect_failure "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test "$fixture_target"
   "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test --refresh "$fixture_target" >/dev/null
   "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test --check "$fixture_target" >/dev/null
-  rg -q '^# Revised source\.$' "$fixture_target/test-example.$extension"
+  grep -q '^# Revised source\.$' "$fixture_target/test-example.$extension"
   printf '\n# Another source revision.\n' >> "$source_definition"
   "$fixture/scripts/uninstall-agents" --runtime "$runtime" --prefix test "$fixture_target" >/dev/null
+  [[ ! -e "$fixture_target/test-example.$extension" ]]
+
+  # Missing required fields and reserved ownership comments still fail validation.
+  cp -- "$source_definition" "$temporary_directory/valid-source.$extension"
+  sed '/^description[[:space:]]*[=:]/d' "$temporary_directory/valid-source.$extension" > "$source_definition"
+  expect_failure "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test --refresh "$fixture_target"
+  grep -Eq '^Invalid (Codex|Claude) definition:' "$temporary_directory/expected-failure.log"
+  [[ ! -e "$fixture_target/test-example.$extension" ]]
+  cp -- "$temporary_directory/valid-source.$extension" "$source_definition"
+  printf '\n# personal-agents-source: example/%s/agent.%s\n' "$runtime" "$extension" >> "$source_definition"
+  expect_failure "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test --refresh "$fixture_target"
+  grep -q '^Source definition contains reserved ownership comments:' "$temporary_directory/expected-failure.log"
   [[ ! -e "$fixture_target/test-example.$extension" ]]
 done
 

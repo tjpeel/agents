@@ -106,6 +106,9 @@ Perform the bounded task in the handoff without exceeding this profile's access 
 
 ## Install missing profiles
 
+The installer uses Bash and standard command-line utilities; ripgrep (`rg`) is
+not required.
+
 ```zsh
 ./scripts/install-agents --runtime codex --prefix tjpeel ~/.codex/agents
 ./scripts/install-agents --runtime claude --prefix tjpeel ~/.claude/agents
@@ -195,10 +198,10 @@ longer wanted.
 
 Run `tests/test-install-agents`, `git diff --check` and
 `scripts/check-public-content`. The installer suite uses temporary directories
-and checks regular-file discovery, stable names, legacy migration, source
-refresh, foreign-catalogue and local-edit protection, and exact removal. It
-does not prove that a running Codex or Claude session can spawn a profile or
-access a pinned model.
+and runs without ripgrep on `PATH`. It checks regular-file discovery, stable
+names, legacy migration, source refresh, foreign-catalogue and local-edit
+protection, and exact removal. It does not prove that a running Codex or Claude
+session can spawn a profile or access a pinned model.
 
 ## References
 

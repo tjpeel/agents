@@ -121,15 +121,15 @@ if [[ ${#agent_files[@]} -eq 0 ]]; then
 fi
 
 for agent_file in "${agent_files[@]}"; do
-  if rg -q '^# personal-agents-(catalogue|source|checksum): ' "$agent_file"; then
+  if grep -Eq '^# personal-agents-(catalogue|source|checksum): ' "$agent_file"; then
     echo "Source definition contains reserved ownership comments: $agent_file" >&2
     exit 1
   fi
   if [[ "$RUNTIME" == "codex" ]]; then
-    valid=$(rg -c '^(name|description|developer_instructions)\s*=' "$agent_file" || true)
+    valid=$(grep -Ec '^(name|description|developer_instructions)[[:space:]]*=' "$agent_file" || true)
     [[ "$valid" -eq 3 ]] || { echo "Invalid Codex definition: $agent_file" >&2; exit 1; }
   else
-    [[ "$(head -n 1 "$agent_file")" == "---" ]] && rg -q '^name:' "$agent_file" && rg -q '^description:' "$agent_file" || { echo "Invalid Claude definition: $agent_file" >&2; exit 1; }
+    [[ "$(head -n 1 "$agent_file")" == "---" ]] && grep -q '^name:' "$agent_file" && grep -q '^description:' "$agent_file" || { echo "Invalid Claude definition: $agent_file" >&2; exit 1; }
   fi
 done
 
