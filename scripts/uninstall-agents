@@ -13,7 +13,7 @@ Modes:
 
 Only the exact agent names generated from this repository's current profile
 folders are removed. For example, --prefix tjpeel removes tjpeel-read-low,
-not another repository's tjpeel-ee-read-low. TARGET_DIRECTORY defaults to
+not another repository's tjpeel-sample-read-low. TARGET_DIRECTORY defaults to
 ~/.codex/agents or ~/.claude/agents for the current user. A literal ~ or ~/
 path is resolved against the current user's home directory.
 
@@ -103,7 +103,9 @@ for agent_directory in "${agent_directories[@]}"; do
     status=1
   else
     echo "missing    $installed_name"
-    status=1
+    # Removal is deliberately idempotent.  Check mode still signals that the
+    # expected installed state is incomplete.
+    [[ "$MODE" == "--check" ]] && status=1
   fi
 done
 

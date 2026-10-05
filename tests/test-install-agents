@@ -50,12 +50,16 @@ for runtime in codex claude; do
   installed_files=("$target"/*)
   [[ ${#installed_files[@]} -eq 6 ]]
   "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
-  printf 'preserve me\n' > "$target/tjpeel-ee-read-low.$extension"
+  printf 'preserve me\n' > "$target/tjpeel-sample-read-low.$extension"
   "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
   for profile in read-deep read-exceptional read-high read-low read-medium write-medium; do
     [[ ! -e "$target/tjpeel-$profile.$extension" && ! -L "$target/tjpeel-$profile.$extension" ]]
   done
-  [[ -f "$target/tjpeel-ee-read-low.$extension" ]]
+  [[ -f "$target/tjpeel-sample-read-low.$extension" ]]
+
+  # Default uninstall is idempotent; check mode still identifies absence.
+  "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
+  expect_failure "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel --check "$target"
 
   # Only links to the exact current repository are eligible for migration.
   mkdir -p "$target"
@@ -94,7 +98,7 @@ for runtime in codex claude; do
   cmp -- "$edited" "$temporary_directory/saved.$extension"
   expect_failure "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
   cmp -- "$edited" "$temporary_directory/saved.$extension"
-  [[ -f "$target/tjpeel-ee-read-low.$extension" ]]
+  [[ -f "$target/tjpeel-sample-read-low.$extension" ]]
 
   # A foreign file or link at an expected name is never replaced or removed.
   conflict="$temporary_directory/$runtime-conflict"

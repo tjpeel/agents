@@ -187,7 +187,9 @@ To remove profiles, use the separate uninstaller:
 
 It removes only this repository's unchanged owned copies or exact legacy links
 for the current profile names. An unchanged older copy remains removable after
-the source changes. Another prefix, such as `tjpeel-ee-*`, is left alone.
+the source changes. Another prefix, such as `tjpeel-sample-*`, is left alone.
+Missing definitions are harmless during removal; `--check` still reports them
+with a non-zero status.
 
 Run the uninstaller before renaming or removing a profile folder, since it uses
 the current folders to determine its exact removal targets. It does not remove
