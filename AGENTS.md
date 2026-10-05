@@ -52,6 +52,14 @@ library in `scripts/` and `tests/`. Passing several filenames to one
   implementation. Keep the required command list current as suites are added.
   Report any required check that cannot run; do not call it a pass.
 
+## Commit identity
+
+Use the `tjpeel` GitHub identity and a signing key registered to that account.
+Before committing, check the effective author email, signing configuration
+and key ownership, then verify the resulting signature. Do not disable signing
+or use another account's key when the required key is unavailable. Keep any
+repository-specific Git configuration local to this checkout.
+
 ## Public-release gate
 
 This repository may become public. Treat the absence of sensitive information
