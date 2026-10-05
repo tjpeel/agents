@@ -34,29 +34,48 @@ for runtime in codex claude; do
   "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
   "$INSTALLER" --runtime "$runtime" --prefix tjpeel --check "$target" >/dev/null
 
-  for profile in read-exceptional read-high read-low read-medium write-medium; do
+  for profile in read-deep read-exceptional read-high read-low read-medium write-medium; do
     definition="$target/tjpeel-$profile.$extension"
     [[ -f "$definition" && ! -L "$definition" ]]
     assert_file_name "$runtime" "$definition" "${profile//-/_}"
   done
-  [[ "$(rg --files "$target" | wc -l | tr -d ' ')" == 5 ]]
+  [[ "$(rg --files "$target" | wc -l | tr -d ' ')" == 6 ]]
   "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
   printf 'preserve me\n' > "$target/tjpeel-ee-read-low.$extension"
   "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
-  [[ ! -e "$target/tjpeel-read-low.$extension" ]]
+  for profile in read-deep read-exceptional read-high read-low read-medium write-medium; do
+    [[ ! -e "$target/tjpeel-$profile.$extension" && ! -L "$target/tjpeel-$profile.$extension" ]]
+  done
   [[ -f "$target/tjpeel-ee-read-low.$extension" ]]
 
   # Only links to the exact current repository are eligible for migration.
   mkdir -p "$target"
-  for profile in read-exceptional read-high read-low read-medium write-medium; do
+  for profile in read-deep read-exceptional read-high read-low read-medium write-medium; do
     ln -s -- "$REPOSITORY_DIRECTORY/$profile/$runtime/agent.$extension" "$target/tjpeel-$profile.$extension"
   done
   expect_failure "$INSTALLER" --runtime "$runtime" --prefix tjpeel --check "$target"
   expect_failure "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target"
-  [[ -L "$target/tjpeel-read-low.$extension" ]]
+  for profile in read-deep read-exceptional read-high read-low read-medium write-medium; do
+    [[ -L "$target/tjpeel-$profile.$extension" ]]
+  done
   "$INSTALLER" --runtime "$runtime" --prefix tjpeel --refresh "$target" >/dev/null
   "$INSTALLER" --runtime "$runtime" --prefix tjpeel --check "$target" >/dev/null
-  [[ -f "$target/tjpeel-read-low.$extension" && ! -L "$target/tjpeel-read-low.$extension" ]]
+  for profile in read-deep read-exceptional read-high read-low read-medium write-medium; do
+    definition="$target/tjpeel-$profile.$extension"
+    [[ -f "$definition" && ! -L "$definition" ]]
+    assert_file_name "$runtime" "$definition" "${profile//-/_}"
+  done
+
+  # Exact legacy links can also be removed without first migrating them.
+  legacy_target="$temporary_directory/$runtime-legacy-uninstall"
+  mkdir -p "$legacy_target"
+  for profile in read-deep read-exceptional read-high read-low read-medium write-medium; do
+    ln -s -- "$REPOSITORY_DIRECTORY/$profile/$runtime/agent.$extension" "$legacy_target/tjpeel-$profile.$extension"
+  done
+  "$UNINSTALLER" --runtime "$runtime" --prefix tjpeel "$legacy_target" >/dev/null
+  for profile in read-deep read-exceptional read-high read-low read-medium write-medium; do
+    [[ ! -e "$legacy_target/tjpeel-$profile.$extension" && ! -L "$legacy_target/tjpeel-$profile.$extension" ]]
+  done
 
   # Edited installed definitions are preserved by refresh and uninstall.
   edited="$target/tjpeel-read-low.$extension"

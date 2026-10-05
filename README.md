@@ -31,6 +31,7 @@ approvals still apply. Model availability depends on the account and provider.
 | `read_low` | Bounded inventories, mapping and quick evidence checks | Sol 6.1 / low | Sonnet 5.5 / low |
 | `read_medium` | Analysis, drafting and evidence or acceptance audits | Sol 6.1 / medium | Sonnet 5.5 / medium |
 | `read_high` | Material risk analysis, complex planning and independent review | Sol 6.1 / high | Opus 5.5 / high |
+| `read_deep` | Selected difficult investigations and complete-diff reviews | Sol 6.1 / max | Opus 5.5 / max |
 | `read_exceptional` | Small synthesis from complete evidence | Sol 6.1 / xhigh | Opus 5.5 / xhigh |
 | `write_medium` | One scoped implementation or local artifact change | Sol 6.1 / medium | Sonnet 5.5 / medium |
 
@@ -41,13 +42,18 @@ prevent a parent running at Ultra or max from raising every delegate's effort.
 These are workload-based starting points, not a claim of equal performance
 between providers. Compare actual task quality before changing a level.
 
-Use low for locating facts, medium for a bounded analysis or implementation,
-and high when judgement or consequential failure paths need scrutiny. Use
-`read_exceptional` only with a small, completed evidence packet that still
-needs difficult synthesis. Reserve Ultra in a supporting Codex client, or
-Claude max, for an explicitly selected difficult task whose lower-effort result
-was insufficient. Codex API effort and client Ultra are distinct settings;
-this catalogue uses the portable `xhigh` value for exceptional work.
+Use low for locating facts and medium for a bounded analysis or implementation.
+Use `read_high` as the default for independent review and when judgement or
+consequential failure paths need scrutiny. Opt into `read_deep` at max only for
+a selected difficult investigation or complete-diff review whose evidence or
+insufficient lower-effort result justifies it. Keep its source, callers and
+tests bounded in the handoff. Use `read_exceptional` at xhigh only with a small,
+completed evidence packet that still needs difficult synthesis.
+
+A coordinator running at Ultra does not raise delegate effort. Client Ultra
+orchestration and the profiles' explicit reasoning effort are distinct settings;
+choose each delegate's profile for its assigned task. These choices make no
+claim of measured savings or equivalent quality between effort levels.
 
 Select the least sufficient profile. Do not create task-specific agent personas:
 put the task, constraints, source material, and output shape in the handoff.
