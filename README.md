@@ -1,62 +1,36 @@
 # Personal execution profiles
 
-This repository is the version-controlled source of reusable execution
-profiles for Codex and Claude Code. A profile sets the required effort and
-write boundary; the calling skill supplies the task-specific role, scope, and
-required output.
+This repository separates task responsibility, access, reasoning effort and
+provider model choice. The handoff defines the role and owned paths. A native
+profile provides the read or write boundary and the selected reasoning band.
 
-Each top-level profile folder contains one or both runtime-specific
-definitions:
+[model-policy.json](model-policy.json) is the canonical policy. Generated Codex
+TOML and Claude Code Markdown are committed so installation needs only Bash and
+standard utilities. Ordinary tasks default to **low** effort, **standard** speed,
+`gpt-6.1-sol` in Codex and `claude-sonnet-5-5` in Claude Code. Increasing effort
+does not automatically change the provider model.
 
-```text
-my-agent/
-  codex/
-    agent.toml
-  claude/
-    agent.md
-```
+## Bands and names
 
-`codex/agent.toml` defines the profile name, model, reasoning effort, sandbox,
-and shared instructions. `claude/agent.md` carries the equivalent behavioural
-contract in YAML frontmatter and a prompt body. Claude definitions pin an
-appropriate model and tool boundary: read profiles can only inspect files,
-while the write profile uses Claude's standard permission prompts for local
-changes. Profiles set Claude subagent effort explicitly; session permissions and
-approvals still apply. Model availability depends on the account and provider.
+| Band | Task evidence |
+| --- | --- |
+| `low` | Clear local change, inventory, mapping or status observation. |
+| `medium` | Bounded analysis or implementation with interacting cases. |
+| `high` | Consequential judgement, substantive review or material failure risks. |
+| `xhigh` | Difficult synthesis of a small, complete evidence packet. |
+| `max` | Difficult investigation or complete-diff review requiring sustained reasoning. |
 
-## Profiles
+Each band has `read_<band>` and `write_<band>` profiles. Access stays the same
+at every band; a higher band never grants additional tools or write permission.
+`read_deep` remains an alias for `read_max`; `read_exceptional` remains an alias
+for `read_xhigh`. Existing `read_low`, `read_medium`, `read_high` and
+`write_medium` names remain available. A role such as mapper, reviewer or writer
+belongs in the handoff, rather than requiring another profile per role.
 
-| Profile | Purpose | Codex | Claude Code |
-| --- | --- | --- | --- |
-| `read_low` | Bounded inventories, mapping and quick evidence checks | Sol 6.1 / low | Sonnet 5.5 / low |
-| `read_medium` | Analysis, drafting and evidence or acceptance audits | Sol 6.1 / medium | Sonnet 5.5 / medium |
-| `read_high` | Material risk analysis, complex planning and independent review | Sol 6.1 / high | Opus 5.5 / high |
-| `read_deep` | Selected difficult investigations and complete-diff reviews | Sol 6.1 / max | Opus 5.5 / max |
-| `read_exceptional` | Small synthesis from complete evidence | Sol 6.1 / xhigh | Opus 5.5 / xhigh |
-| `write_medium` | One scoped implementation or local artifact change | Sol 6.1 / medium | Sonnet 5.5 / medium |
-
-Codex definitions pin `gpt-6.1-sol`; Claude definitions pin
-`claude-sonnet-5-5` or `claude-opus-5-5`. All read profiles keep read-only access;
-`write_medium` retains its scoped local write boundary. Explicit effort settings
-prevent a parent running at Ultra or max from raising every delegate's effort.
-These are workload-based starting points, not a claim of equal performance
-between providers. Compare actual task quality before changing a level.
-
-Use low for locating facts and medium for a bounded analysis or implementation.
-Use `read_high` as the default for independent review and when judgement or
-consequential failure paths need scrutiny. Opt into `read_deep` at max only for
-a selected difficult investigation or complete-diff review whose evidence or
-insufficient lower-effort result justifies it. Keep its source, callers and
-tests bounded in the handoff. Use `read_exceptional` at xhigh only with a small,
-completed evidence packet that still needs difficult synthesis.
-
-A coordinator running at Ultra does not raise delegate effort. Client Ultra
-orchestration and the profiles' explicit reasoning effort are distinct settings;
-choose each delegate's profile for its assigned task. These choices make no
-claim of measured savings or equivalent quality between effort levels.
-
-Select the least sufficient profile. Do not create task-specific agent personas:
-put the task, constraints, source material, and output shape in the handoff.
+Use the least sufficient band for the bounded task. Select a higher band upfront
+when the evidence warrants it, or escalate for a specific unresolved question.
+The coordinator's effort setting does not determine every delegate's band.
+See [selection, provider capabilities and tomorrow's checks](docs/model-policy.md).
 
 ## Public-release gate
 
@@ -74,35 +48,21 @@ scripts/check-public-content
 The check detects common secret formats; it does not replace a deliberate
 human review of every changed agent definition, supporting file, and example.
 
-## Add a profile
+## Maintain the policy
 
-Create `my-profile/codex/agent.toml`:
+Generation and selection require Python 3.11 or newer; installation and removal
+do not require Python. Edit the canonical policy and regenerate its definitions:
 
-```toml
-name = "my_profile"
-description = "One sentence explaining this effort and access profile."
-model = "gpt-6.1-sol"
-model_reasoning_effort = "low"
-sandbox_mode = "read-only"
-developer_instructions = """
-Perform the bounded task in the handoff without exceeding this profile's access boundary.
-"""
+```sh
+scripts/model-policy render
+scripts/model-policy check
+scripts/model-policy select --runtime codex --access write
+scripts/model-policy select --runtime claude --access read --band high
 ```
 
-Create `my-profile/claude/agent.md` when the profile should also be available to
-Claude Code:
-
-```md
----
-name: my_profile
-description: One sentence explaining this effort and access profile.
-tools: Read, Glob, Grep
-model: claude-sonnet-5-5
-effort: low
----
-
-Perform the bounded task in the handoff without exceeding this profile's access boundary.
-```
+`select` resolves an already graded task; it does not infer complexity from prose
+or verify a live client's effective settings. Keep provider-specific configuration
+in the renderer and model adapter, rather than adding unsupported native fields.
 
 ## Install missing profiles
 
@@ -198,7 +158,7 @@ longer wanted.
 
 ## Validate a change
 
-Run `tests/test-install-agents`, `tests/test-check-public-content`,
+Run `tests/test-model-policy`, `tests/test-install-agents`, `tests/test-check-public-content`,
 `git diff --check` and `scripts/check-public-content`. Both test suites use
 temporary directories and run without ripgrep on `PATH`. The installer suite
 checks regular-file discovery, stable names, legacy migration, source refresh,

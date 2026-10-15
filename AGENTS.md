@@ -6,6 +6,7 @@ Before staging or committing any change, including documentation, run these
 checks from the repository root:
 
 ```sh
+tests/test-model-policy
 tests/test-install-agents
 tests/test-check-public-content
 git diff --check

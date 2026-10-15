@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "default_band": "low",
+  "default_speed": "standard",
+  "bands": [
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max"
+  ],
+  "runtimes": {
+    "codex": {
+      "models": {
+        "low": "gpt-6.1-sol",
+        "medium": "gpt-6.1-sol",
+        "high": "gpt-6.1-sol",
+        "xhigh": "gpt-6.1-sol",
+        "max": "gpt-6.1-sol"
+      },
+      "overrides": {}
+    },
+    "claude": {
+      "models": {
+        "low": "claude-sonnet-5-5",
+        "medium": "claude-sonnet-5-5",
+        "high": "claude-sonnet-5-5",
+        "xhigh": "claude-sonnet-5-5",
+        "max": "claude-sonnet-5-5"
+      },
+      "overrides": {
+        "opus": "claude-opus-5-5"
+      }
+    }
+  },
+  "access": {
+    "read": {
+      "codex_sandbox": "read-only",
+      "claude_tools": [
+        "Read",
+        "Glob",
+        "Grep"
+      ],
+      "instructions": "Perform the bounded read-only task in the handoff. Use direct evidence and report material uncertainty, source locations and the requested output. Do not edit files, run commands that write files, change external state or broaden the task."
+    },
+    "write": {
+      "codex_sandbox": "workspace-write",
+      "claude_tools": [
+        "Read",
+        "Glob",
+        "Grep",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "instructions": "Own the bounded write task in the handoff. Make the smallest defensible change that satisfies the agreed scope and applicable repository guidance, preserve unrelated work, and run proportionate verification. Do not commit, push, create a pull request, make external changes, or perform unrelated cleanup unless explicitly asked. Report changed files, checks run, and remaining risks."
+    }
+  },
+  "aliases": {
+    "read_deep": "read_max",
+    "read_exceptional": "read_xhigh"
+  }
+}
