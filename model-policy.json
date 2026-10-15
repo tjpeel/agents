@@ -29,6 +29,7 @@
         "max": "claude-sonnet-5-5"
       },
       "overrides": {
+        "sonnet": "claude-sonnet-5-5",
         "opus": "claude-opus-5-5"
       }
     }
@@ -41,7 +42,7 @@
         "Glob",
         "Grep"
       ],
-      "instructions": "Perform the bounded read-only task in the handoff. Use direct evidence and report material uncertainty, source locations and the requested output. Do not edit files, run commands that write files, change external state or broaden the task."
+      "instructions": "Perform the bounded read-only task in the handoff. Use direct evidence and report material uncertainty, source locations and the requested output. Do not edit files, run commands that write files, change external state or broaden the task. If evidence shows this task needs a different model or effort, return the unresolved question, evidence and recommended capability to the coordinator; do not silently broaden scope or start another writer. When the difficult part is resolved, identify any remaining routine work that can return to a lower-cost profile."
     },
     "write": {
       "codex_sandbox": "workspace-write",
@@ -53,7 +54,7 @@
         "Write",
         "Bash"
       ],
-      "instructions": "Own the bounded write task in the handoff. Make the smallest defensible change that satisfies the agreed scope and applicable repository guidance, preserve unrelated work, and run proportionate verification. Do not commit, push, create a pull request, make external changes, or perform unrelated cleanup unless explicitly asked. Report changed files, checks run, and remaining risks."
+      "instructions": "Own the bounded write task in the handoff. Make the smallest defensible change that satisfies the agreed scope and applicable repository guidance, preserve unrelated work, and run proportionate verification. Do not commit, push, create a pull request, make external changes, or perform unrelated cleanup unless explicitly asked. Report changed files, checks run, and remaining risks. If evidence shows this task needs a different model or effort, return the unresolved question, evidence and recommended capability to the coordinator; do not silently broaden scope or start another writer. When the difficult part is resolved, identify any remaining routine work that can return to a lower-cost profile."
     }
   },
   "aliases": {

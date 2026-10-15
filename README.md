@@ -20,17 +20,20 @@ does not automatically change the provider model.
 | `xhigh` | Difficult synthesis of a small, complete evidence packet. |
 | `max` | Difficult investigation or complete-diff review requiring sustained reasoning. |
 
-Each band has `read_<band>` and `write_<band>` profiles. Access stays the same
-at every band; a higher band never grants additional tools or write permission.
-`read_deep` remains an alias for `read_max`; `read_exceptional` remains an alias
-for `read_xhigh`. Existing `read_low`, `read_medium`, `read_high` and
-`write_medium` names remain available. A role such as mapper, reviewer or writer
-belongs in the handoff, rather than requiring another profile per role.
+Each band has `read_<band>` and `write_<band>` profiles: Sol in Codex,
+Sonnet in Claude. Claude also installs `read_opus_<band>` and
+`write_opus_<band>` at every band. Model capability and reasoning effort are
+independent choices: Sonnet high and Opus low are both available. `read_deep`
+remains an alias for `read_max`; `read_exceptional` remains an alias for
+`read_xhigh`. Existing declared names remain available.
 
-Use the least sufficient band for the bounded task. Select a higher band upfront
-when the evidence warrants it, or escalate for a specific unresolved question.
-The coordinator's effort setting does not determine every delegate's band.
-See [selection, provider capabilities and tomorrow's checks](docs/model-policy.md).
+The invoking skill classifies the bounded task, selects read or write access,
+then chooses model and effort separately. Sonnet is the ordinary Claude choice;
+Opus is available for difficult ambiguity, architecture tradeoffs or synthesis
+that warrants its capability. A Sonnet lead can delegate to Opus; an Opus lead
+should return routine work to Sonnet at suitable effort. Access and ownership
+stay unchanged across model switches. The lead's own settings are unchanged.
+See [selection and provider capabilities](docs/model-policy.md).
 
 ## Public-release gate
 

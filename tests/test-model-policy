@@ -57,6 +57,42 @@ class ModelPolicyTests(unittest.TestCase):
             changed.write_text(changed.read_text().replace('workspace-write', 'danger-full-access'))
             self.assertIn("write-low/codex/agent.toml", self.run_policy("check", "--output", target, ok=False).stderr)
 
+    def test_blank_install_contains_both_models_at_every_effort(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            rendered = target / "catalogue"
+            self.run_policy("render", "--output", rendered)
+            self.assertEqual(len(list(rendered.glob("*/claude/agent.md"))), 22)
+            self.assertEqual(len(list(rendered.glob("*/codex/agent.toml"))), 12)
+            for access in ("read", "write"):
+                for band in BANDS:
+                    for family, model in (("sonnet", "claude-sonnet-5-5"), ("opus", "claude-opus-5-5")):
+                        selected = json.loads(self.run_policy("select", "--runtime", "claude", "--access", access,
+                                                              "--band", band, "--model", family).stdout)
+                        profile = selected["profile"]
+                        definition = rendered / profile.replace("_", "-") / "claude/agent.md"
+                        header = dict(line.split(": ", 1) for line in definition.read_text().split("---", 2)[1].strip().splitlines())
+                        self.assertEqual(header["name"], profile)
+                        self.assertEqual(header["model"], model)
+                        self.assertEqual(header["effort"], band)
+                        self.assertEqual(selected["effort"], band)
+                        self.assertEqual(header["tools"], "Read, Glob, Grep" if access == "read" else "Read, Glob, Grep, Edit, Write, Bash")
+            for runtime, extension, count in (("claude", "md", 22), ("codex", "toml", 12)):
+                installed = target / runtime
+                command = [str(ROOT / "scripts/install-agents"), "--runtime", runtime, "--prefix", "sample", str(installed)]
+                result = subprocess.run(command, text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(len(list(installed.glob(f"*.{extension}"))), count)
+                if runtime == "claude":
+                    for access in ("read", "write"):
+                        for band in BANDS:
+                            for suffix, model in (("", "claude-sonnet-5-5"), ("-opus", "claude-opus-5-5")):
+                                content = (installed / f"sample-{access}{suffix}-{band}.md").read_text()
+                                self.assertIn(f"model: {model}\n", content)
+                                self.assertIn(f"effort: {band}\n", content)
+                result = subprocess.run(command[:-1] + ["--check", str(installed)], text=True, capture_output=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_explicit_opus_is_separate_and_does_not_change_defaults(self):
         result = json.loads(self.run_policy("select", "--runtime", "claude", "--access", "read", "--band", "high", "--model", "opus").stdout)
         self.assertEqual(result["profile"], "read_opus_high")

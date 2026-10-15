@@ -27,7 +27,7 @@ def load_policy(path):
             raise ValueError(f"incomplete {runtime} model adapter")
         if any(model not in MODELS[runtime] for model in adapter["models"].values()):
             raise ValueError(f"unsupported {runtime} model")
-        expected_overrides = {} if runtime == "codex" else {"opus": "claude-opus-5-5"}
+        expected_overrides = {} if runtime == "codex" else {"sonnet": "claude-sonnet-5-5", "opus": "claude-opus-5-5"}
         if adapter["overrides"] != expected_overrides:
             raise ValueError(f"unsupported {runtime} model overrides")
     for access, boundary in policy["access"].items():
@@ -53,24 +53,24 @@ def selection(policy, runtime, access, band, model=None):
     adapter = policy["runtimes"][runtime]
     if model is not None and model not in adapter["overrides"]:
         raise ValueError(f"unsupported {runtime} model override: {model}")
-    name = f"{access}_{model}_{band}" if model else f"{access}_{band}"
+    name = f"{access}_{model}_{band}" if model == "opus" else f"{access}_{band}"
     return {"profile": name, "model": adapter["overrides"][model] if model else adapter["models"][band],
             "effort": band, "access": access, "speed_intent": policy["default_speed"]}
 
 
-def definitions(policy, runtime_filter=None, model_override=None):
+def base_definitions(policy, runtime_filter=None, model_override=None):
     result = {}
     for name, (access, band) in profiles(policy).items():
         if model_override and name in policy["aliases"]:
             continue
-        if model_override:
+        if model_override == "opus":
             name = f"{access}_{model_override}_{band}"
         boundary = policy["access"][access]
-        description = f"{band.capitalize()} effort for a bounded {access} task; the handoff defines its responsibility."
         for runtime in MODELS:
             if runtime_filter and runtime != runtime_filter:
                 continue
             model = selection(policy, runtime, access, band, model_override)["model"]
+            description = f"{model}, {band} effort for bounded {access} task; handoff defines its responsibility."
             if runtime == "codex":
                 values = {"name": name, "description": description, "model": model,
                           "model_reasoning_effort": band, "sandbox_mode": boundary["codex_sandbox"],
@@ -87,6 +87,13 @@ def definitions(policy, runtime_filter=None, model_override=None):
                 content += boundary["instructions"] + "\n"
                 extension = "md"
             result[Path(name.replace("_", "-")) / runtime / f"agent.{extension}"] = content
+    return result
+
+
+def definitions(policy, runtime_filter=None, model_override=None):
+    result = base_definitions(policy, runtime_filter, model_override)
+    if model_override is None and runtime_filter in (None, "claude"):
+        result.update(base_definitions(policy, "claude", "opus"))
     return result
 
 
