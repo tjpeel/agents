@@ -5,7 +5,7 @@ provider model choice. The handoff defines the role and owned paths. A native
 profile provides the read or write boundary and the selected reasoning band.
 
 [model-policy.json](model-policy.json) is the canonical policy. Generated Codex
-TOML and Claude Code Markdown are committed so installation needs only Bash and
+TOML, Claude Code Markdown and OpenCode Markdown are committed so installation needs only Bash and
 standard utilities. Ordinary tasks default to **low** effort, **standard** speed,
 `gpt-6.1-sol` in Codex and `claude-sonnet-5-5` in Claude Code. Increasing effort
 does not automatically change the provider model.
@@ -180,3 +180,14 @@ and [Sol 6.1 model documentation](https://developers.openai.com/api/docs/models/
 and Anthropic's [subagent configuration](https://code.claude.com/docs/en/sub-agents),
 [model overview](https://platform.claude.com/docs/en/models/overview) and
 [effort guidance](https://platform.claude.com/docs/en/build-with-claude/effort).
+
+OpenCode with Synthetic is also supported:
+
+```sh
+scripts/install-agents --runtime opencode --prefix tjpeel
+```
+
+The default model is `synthetic/hf:moonshotai/Kimi-K3`. Read and write workload
+profiles use native OpenCode permissions and do not invent effort controls.
+See [the model policy](docs/model-policy.md#opencode-with-synthetic) for discovery,
+refresh, removal and the permission boundary.

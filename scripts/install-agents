@@ -5,7 +5,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: install-agents --runtime codex|claude --prefix PREFIX [--check | --install | --refresh] [TARGET_DIRECTORY]
+Usage: install-agents --runtime codex|claude|opencode --prefix PREFIX [--check | --install | --refresh] [TARGET_DIRECTORY]
 
 Modes:
   --check    Report current, stale, legacy, missing, and conflicting definitions.
@@ -13,11 +13,13 @@ Modes:
   --refresh  Update unchanged owned copies and migrate this repository's links.
 
 Each direct child of the repository is an agent folder. Install Codex from
-<agent>/codex/agent.toml or Claude from <agent>/claude/agent.md. PREFIX is
+<agent>/codex/agent.toml, Claude from <agent>/claude/agent.md, or OpenCode
+from <agent>/opencode/agent.md. PREFIX is
 included in the installed filename: for example, --prefix tjpeel installs
 read-low as tjpeel-read-low. Definitions are copied with ownership comments; their
-declared agent names remain stable. TARGET_DIRECTORY defaults to ~/.codex/agents
-or ~/.claude/agents for the current user. A literal ~ or ~/ path is resolved
+declared Codex/Claude names remain stable; OpenCode uses the installed filename.
+TARGET_DIRECTORY defaults to ~/.codex/agents, ~/.claude/agents or the XDG config
+directory opencode/agents. A literal ~ or ~/ path is resolved
 against the current user's home directory.
 
 EOF
@@ -69,8 +71,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$RUNTIME" != "codex" && "$RUNTIME" != "claude" ]]; then
-  echo "--runtime must be codex or claude." >&2
+if [[ "$RUNTIME" != "codex" && "$RUNTIME" != "claude" && "$RUNTIME" != "opencode" ]]; then
+  echo "--runtime must be codex, claude or opencode." >&2
   exit 2
 fi
 if [[ -z "$PREFIX" ]]; then
@@ -83,7 +85,7 @@ if [[ ! "$PREFIX" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
 fi
 
 if [[ "$target_given" == false ]]; then
-  if [[ "$RUNTIME" == "codex" ]]; then TARGET_DIRECTORY="${CODEX_HOME:-$HOME/.codex}/agents"; else TARGET_DIRECTORY="$HOME/.claude/agents"; fi
+  if [[ "$RUNTIME" == "codex" ]]; then TARGET_DIRECTORY="${CODEX_HOME:-$HOME/.codex}/agents"; elif [[ "$RUNTIME" == "claude" ]]; then TARGET_DIRECTORY="$HOME/.claude/agents"; else TARGET_DIRECTORY="${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents"; fi
 fi
 case "$TARGET_DIRECTORY" in
   '~') TARGET_DIRECTORY="$HOME" ;;
@@ -128,6 +130,8 @@ for agent_file in "${agent_files[@]}"; do
   if [[ "$RUNTIME" == "codex" ]]; then
     valid=$(grep -Ec '^(name|description|developer_instructions)[[:space:]]*=' "$agent_file" || true)
     [[ "$valid" -eq 3 ]] || { echo "Invalid Codex definition: $agent_file" >&2; exit 1; }
+  elif [[ "$RUNTIME" == "opencode" ]]; then
+    [[ "$(head -n 1 "$agent_file")" == "---" ]] && grep -q '^description:' "$agent_file" && grep -q '^mode: subagent$' "$agent_file" && grep -q '^model:' "$agent_file" && grep -q '^permission:' "$agent_file" || { echo "Invalid OpenCode definition: $agent_file" >&2; exit 1; }
   else
     [[ "$(head -n 1 "$agent_file")" == "---" ]] && grep -q '^name:' "$agent_file" && grep -q '^description:' "$agent_file" || { echo "Invalid Claude definition: $agent_file" >&2; exit 1; }
   fi
