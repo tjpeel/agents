@@ -30,6 +30,7 @@ try:
     else:
         paths = {p for p in root.glob("*/codex/*.toml") if p.is_file() or p.is_symlink()}
         paths.update(p for p in root.glob("*/claude/*.md") if p.is_file() or p.is_symlink())
+        paths.update(p for p in root.glob("*/opencode/*.md") if p.is_file() or p.is_symlink())
         if (root / "model-policy.json").is_file():
             paths.add(root / "model-policy.json")
     if not paths:
@@ -46,7 +47,7 @@ try:
         if KIND == "skills":
             category = "entry_instruction" if path.name == "SKILL.md" else "resource"
         else:
-            category = "policy" if relative == "model-policy.json" else ("codex_definition" if path.suffix == ".toml" else "claude_definition")
+            category = "policy" if relative == "model-policy.json" else path.parent.name + "_definition"
         files.append(dict(path=relative, category=category, bytes=len(data), sha256=fingerprint))
         digest.update(relative.encode("utf-8") + b"\0" + bytes.fromhex(fingerprint))
         total += len(data)

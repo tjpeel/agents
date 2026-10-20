@@ -52,6 +52,21 @@ class InventoryTests(unittest.TestCase):
             entry.write_text("changed")
             self.assertNotEqual(report["fingerprint"], json.loads(self.run_report(root).stdout)["fingerprint"])
 
+    def test_every_supported_runtime_is_measured(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for runtime, extension in (("codex", "toml"), ("claude", "md"), ("opencode", "md")):
+                entry = root / "read-low" / runtime / ("agent." + extension)
+                entry.parent.mkdir(parents=True)
+                entry.write_text(runtime)
+            report = json.loads(self.run_report(root).stdout)
+            self.assertEqual(report["file_count"], 3)
+            self.assertEqual({row["category"] for row in report["files"]},
+                             {"codex_definition", "claude_definition", "opencode_definition"})
+            before = report["fingerprint"]
+            (root / "read-low/opencode/agent.md").write_text("changed")
+            self.assertNotEqual(before, json.loads(self.run_report(root).stdout)["fingerprint"])
+
     def test_internal_reference_is_measured_and_external_link_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder) / "catalogue"
