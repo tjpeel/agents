@@ -9,6 +9,7 @@ checks from the repository root:
 tests/test-model-policy
 tests/test-install-agents
 tests/test-check-public-content
+tests/test-context-inventory
 git diff --check
 scripts/check-public-content
 ```
