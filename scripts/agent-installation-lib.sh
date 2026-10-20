@@ -43,11 +43,11 @@ write_definition() {
   checksum="$(cksum < "$agent_file")"
   temporary_file="$(mktemp "$TARGET_DIRECTORY/.personal-agents.XXXXXX")"
   if ! {
-    if [[ "$RUNTIME" == "claude" ]]; then
+    if [[ "$RUNTIME" != "codex" ]]; then
       head -n 1 "$agent_file"
     fi
     printf '# personal-agents-catalogue: %s\n# personal-agents-source: %s\n# personal-agents-checksum: %s\n' "$CATALOGUE_ID" "$source_key" "$checksum"
-    if [[ "$RUNTIME" == "claude" ]]; then
+    if [[ "$RUNTIME" != "codex" ]]; then
       tail -n +2 "$agent_file"
     else
       cat "$agent_file"

@@ -152,6 +152,30 @@ class ModelPolicyTests(unittest.TestCase):
             self.assertIn("python3", result.stderr)
             self.assertFalse(target.exists())
 
+    def test_opencode_profiles_use_native_permissions_without_effort(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            self.run_policy("render", "--runtime", "opencode", "--output", target)
+            self.assertEqual(len(list(target.glob("*/opencode/agent.md"))), 12)
+            for access in ("read", "write"):
+                for band in BANDS:
+                    selected = json.loads(self.run_policy("select", "--runtime", "opencode", "--access", access, "--band", band).stdout)
+                    self.assertIsNone(selected["effort"])
+                    self.assertEqual(selected["band"], band)
+                    self.assertEqual(selected["model"], "synthetic/hf:moonshotai/Kimi-K3")
+                    content = (target / f"{access}-{band}/opencode/agent.md").read_text()
+                    header = dict(line.split(": ", 1) for line in content.split("---", 2)[1].strip().splitlines())
+                    self.assertEqual(header["mode"], "subagent")
+                    self.assertNotIn("effort", header)
+                    permissions = json.loads(header["permission"])
+                    self.assertEqual(permissions["*"], "deny")
+                    for tool in ("read", "glob", "grep"):
+                        self.assertEqual(permissions[tool], "allow")
+                    for tool in ("edit", "bash"):
+                        self.assertEqual(permissions.get(tool, permissions["*"]), "allow" if access == "write" else "deny")
+                    for tool in ("task", "webfetch", "skill", "external_directory"):
+                        self.assertEqual(permissions.get(tool, permissions["*"]), "deny")
+
     def test_committed_profiles_are_current(self):
         self.run_policy("check")
 

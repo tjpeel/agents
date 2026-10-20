@@ -5,7 +5,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: uninstall-agents --runtime codex|claude --prefix PREFIX [--check | --uninstall] [TARGET_DIRECTORY]
+Usage: uninstall-agents --runtime codex|claude|opencode --prefix PREFIX [--check | --uninstall] [TARGET_DIRECTORY]
 
 Modes:
   --check      Report this repository's owned, missing, and conflicting definitions.
@@ -14,7 +14,7 @@ Modes:
 Only the exact agent names generated from this repository's current profile
 folders are removed. For example, --prefix tjpeel removes tjpeel-read-low,
 not another repository's tjpeel-sample-read-low. TARGET_DIRECTORY defaults to
-~/.codex/agents or ~/.claude/agents for the current user. A literal ~ or ~/
+~/.codex/agents, ~/.claude/agents or the XDG config directory opencode/agents. A literal ~ or ~/
 path is resolved against the current user's home directory.
 
 EOF
@@ -59,12 +59,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ "$RUNTIME" == "codex" || "$RUNTIME" == "claude" ]] || { echo "--runtime must be codex or claude." >&2; exit 2; }
+[[ "$RUNTIME" == "codex" || "$RUNTIME" == "claude" || "$RUNTIME" == "opencode" ]] || { echo "--runtime must be codex, claude or opencode." >&2; exit 2; }
 [[ -n "$PREFIX" ]] || { echo "--prefix is required." >&2; usage >&2; exit 2; }
 [[ "$PREFIX" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "PREFIX must start with a lowercase letter or number and use only lowercase letters, numbers, or hyphens." >&2; exit 2; }
 
 if [[ "$target_given" == false ]]; then
-  if [[ "$RUNTIME" == "codex" ]]; then TARGET_DIRECTORY="${CODEX_HOME:-$HOME/.codex}/agents"; else TARGET_DIRECTORY="$HOME/.claude/agents"; fi
+  if [[ "$RUNTIME" == "codex" ]]; then TARGET_DIRECTORY="${CODEX_HOME:-$HOME/.codex}/agents"; elif [[ "$RUNTIME" == "claude" ]]; then TARGET_DIRECTORY="$HOME/.claude/agents"; else TARGET_DIRECTORY="${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents"; fi
 fi
 case "$TARGET_DIRECTORY" in
   '~') TARGET_DIRECTORY="$HOME" ;;

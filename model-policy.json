@@ -32,6 +32,16 @@
         "sonnet": "claude-sonnet-5-5",
         "opus": "claude-opus-5-5"
       }
+    },
+    "opencode": {
+      "models": {
+        "low": "synthetic/hf:moonshotai/Kimi-K3",
+        "medium": "synthetic/hf:moonshotai/Kimi-K3",
+        "high": "synthetic/hf:moonshotai/Kimi-K3",
+        "xhigh": "synthetic/hf:moonshotai/Kimi-K3",
+        "max": "synthetic/hf:moonshotai/Kimi-K3"
+      },
+      "overrides": {}
     }
   },
   "access": {

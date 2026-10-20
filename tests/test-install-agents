@@ -22,6 +22,10 @@ assert_file_name() {
   local runtime="$1" file="$2" expected="$3" actual
   if [[ "$runtime" == "codex" ]]; then
     actual="$(sed -n 's/^name[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$file")"
+  elif [[ "$runtime" == "opencode" ]]; then
+    [[ "$(head -n 1 "$file")" == "---" ]]
+    grep -q "^mode: subagent$" "$file"
+    return
   else
     actual="$(sed -n 's/^name:[[:space:]]*//p' "$file")"
     [[ "$(head -n 1 "$file")" == "---" ]]
@@ -36,7 +40,7 @@ expect_failure() {
   fi
 }
 
-for runtime in codex claude; do
+for runtime in codex claude opencode; do
   if [[ "$runtime" == "codex" ]]; then extension="toml"; else extension="md"; fi
   target="$temporary_directory/$runtime"
   "$INSTALLER" --runtime "$runtime" --prefix tjpeel "$target" >/dev/null
@@ -155,7 +159,7 @@ for runtime in codex claude; do
   cp -- "$source_definition" "$temporary_directory/valid-source.$extension"
   sed '/^description[[:space:]]*[=:]/d' "$temporary_directory/valid-source.$extension" > "$source_definition"
   expect_failure "$fixture/scripts/install-agents" --runtime "$runtime" --prefix test --refresh "$fixture_target"
-  grep -Eq '^Invalid (Codex|Claude) definition:' "$temporary_directory/expected-failure.log"
+  grep -Eq '^Invalid (Codex|Claude|OpenCode) definition:' "$temporary_directory/expected-failure.log"
   [[ ! -e "$fixture_target/test-example.$extension" ]]
   cp -- "$temporary_directory/valid-source.$extension" "$source_definition"
   printf '\n# personal-agents-source: example/%s/agent.%s\n' "$runtime" "$extension" >> "$source_definition"
@@ -163,5 +167,11 @@ for runtime in codex claude; do
   grep -q '^Source definition contains reserved ownership comments:' "$temporary_directory/expected-failure.log"
   [[ ! -e "$fixture_target/test-example.$extension" ]]
 done
+
+# OpenCode defaults use native XDG discovery rather than ~/.opencode.
+XDG_CONFIG_HOME="$temporary_directory/xdg" "$INSTALLER" --runtime opencode --prefix test >/dev/null
+[[ -f "$temporary_directory/xdg/opencode/agents/test-read-low.md" ]]
+XDG_CONFIG_HOME="$temporary_directory/xdg" "$UNINSTALLER" --runtime opencode --prefix test >/dev/null
+[[ ! -e "$temporary_directory/xdg/opencode/agents/test-read-low.md" ]]
 
 echo "Agent install, discovery, refresh and ownership checks passed."

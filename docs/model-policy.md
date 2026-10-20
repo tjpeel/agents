@@ -46,8 +46,8 @@ scripts/model-policy check
 
 The first selection resolves to `write_high`; the second to
 `write_opus_medium`. Omitting `--model` preserves the default Sonnet or Sol
-choice. Default rendering produces 12 Codex and 22 Claude definitions, including
-legacy names. The normal installer installs all definitions for its runtime.
+choice. Default rendering produces 12 Codex, 22 Claude and 12 OpenCode definitions,
+including legacy names. The normal installer installs all definitions for its runtime.
 Filtered rendering with `--runtime claude --model opus --output /tmp/model-profiles`
 is still available for inspection; a separate output is required when filtering
 by model so canonical definitions cannot be overwritten by a partial catalogue.
@@ -129,3 +129,34 @@ model changes in both directions, ownership transfer and fallback. It did not
 spawn a provider model or verify live access, performance, settings or enforced
 permissions. Automated checks separately cover all model/effort definitions,
 blank installation, ownership-safe refresh and removal.
+
+## OpenCode with Synthetic
+
+`opencode` selects `synthetic/hf:moonshotai/Kimi-K3` for every workload band.
+Bands retain the bounded handoff classification and filename convention; they
+do not set Kimi reasoning effort. Selection reports `effort: null` and the
+chosen `band`. Generated Markdown omits unsupported effort and speed fields.
+
+```sh
+scripts/model-policy select --runtime opencode --access read --band medium
+scripts/install-agents --runtime opencode --prefix tjpeel
+scripts/install-agents --runtime opencode --prefix tjpeel --check
+scripts/install-agents --runtime opencode --prefix tjpeel --refresh
+scripts/uninstall-agents --runtime opencode --prefix tjpeel
+```
+
+OpenCode discovers the installed filename as the agent name, for example
+`tjpeel-read-medium`, from `${XDG_CONFIG_HOME:-$HOME/.config}/opencode/agents`
+or a supplied project `.opencode/agents` target. Native frontmatter specifies
+`mode: subagent`, model and permissions. Ordered permissions deny `*` first,
+then allow read/glob/grep; writers also allow edit/bash. The edit permission
+covers OpenCode write and apply_patch tools. Task, skill, external-directory
+and other tools stay denied; read delegates cannot launch a writer or run Bash.
+Writers still need explicit user authority for external actions.
+
+All profiles use existing checksum ownership, refresh and uninstall handling.
+Offline tests establish generated structure and file lifecycle; live model
+access and provider credentials are outside installation checks.
+
+Official references: <https://opencode.ai/docs/agents/>,
+<https://opencode.ai/docs/permissions/>.
